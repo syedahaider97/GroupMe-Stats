@@ -14,6 +14,6 @@ All that is needed to run the application is a GroupMe API Key. One can be obtai
 2. Logging in on the top right
 3. Selecting 'Access Token'
 
-Now, copy the access token, download all 3 files, and run the application! The program will guide you through the rest.
+Now, copy the access token, download both files, and run the application! The program will guide you through the rest.
 
 If you have any questions, or bugs to report, please contact me at sh424@njit.edu
