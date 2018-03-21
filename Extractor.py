@@ -4,6 +4,7 @@ import json
 import sys
 import operator
 import os
+import re
 from datetime import datetime, timezone
 from time import sleep
 
@@ -13,13 +14,16 @@ accessToken = ""
 getChat = False
 getCommentorStats = False
 getImageLog = False
+getVideoLog = False
 
+#Setup to stage the execution of the program
 def intro():
     global stream
     global accessToken
     global getChat
     global getCommentorStats
     global getImageLog
+    global getVideoLog
     
     print("Hello, and welcome to the GroupMe Stats Extractor")
     print("If you do not already have an access token, please refer to the README")
@@ -27,15 +31,8 @@ def intro():
     accessToken = input("Please Enter Your Access Token Now: ")
     
     print("Would you like to process a Group or a Direct Message stream?")
-    try:
+    while stream != 1 and stream != 2:
         stream = int(input("Enter 1 for Group, or 2 for Direct Message "))
-        if stream != 1 and stream != 2:
-            raise ValueError("Invalid input!")
-    except:
-        print("\nError from user input.")
-        print("Please enter either a 1 or a 2.")
-        print("Restarting Program...\n")
-        intro()
         
     if stream == 1:
         stream = "groups"
@@ -60,8 +57,8 @@ def intro():
             print(allStream.index(option) + 1,".\t",option["name"])
    
     choice = input("Please enter your choice: ")
-    while not choice.isdigit():
-        choice = input("Please enter your choice: ")
+    while not choice.isdigit() and choice <= 0 and choice >= len(allStream):
+        choice = input("Please enter a valid choice: ")
     choice = int(choice) - 1
    
     print("Which of the following would you like to enable (Please answer with 'y' or 'n'):")
@@ -69,6 +66,7 @@ def intro():
     chatHistory = ""
     commentorStats = ""
     imageLog = ""
+    videoLog = ""
 
     while len(chatHistory) < 1:
         chatHistory = input("Obtain Chat History? ")
@@ -76,24 +74,24 @@ def intro():
         commentorStats = input("Obtain Commentor Stats? ")
     while len(imageLog) < 1:
         imageLog = input("Obtain all Images? ")
+    while len(videoLog) < 1:
+        videoLog = input("Obtain all Videos? ")
     if chatHistory[0].lower() == "y":
         getChat = True
     if commentorStats[0].lower() == "y":
         getCommentorStats = True
     if imageLog[0].lower() == "y":
         getImageLog = True
+    if videoLog[0].lower() == "y":
+        getVideoLog = True
 
-    try:
-        if stream == "groups":
-            return allStream[choice]["id"]
-        elif stream == "chats":
-            return allStream[choice]["other_user"]["id"]
-    except:
-        print("\nError in selection of group.")
-        print("This is likely because the choice entered above was not a valid number.")
-        print("Restarting Program...\n")
-        intro()
 
+    if stream == "groups":
+        return allStream[choice]["id"]
+    elif stream == "chats":
+        return allStream[choice]["other_user"]["id"]
+    
+#Obtains all groups/direct messages using paging
 def getAll(choice, token):
     base = "https://api.groupme.com/v3"
     base += "/" + choice + "?token=" + token + "&per_page=100&omit=membership"
@@ -113,6 +111,7 @@ def getAll(choice, token):
         
     return response
 
+#Returns the link used to make GET requests to construct the messagelog
 def getLink(groupId):
     link = "https://api.groupme.com/v3"
     if stream == "groups":
@@ -123,11 +122,23 @@ def getLink(groupId):
         link += "&token=" + accessToken + "&limit=100"
     return link
 
+#Gets basic information about the chat. Used to obtain name and members
+def getChatDetails(groupId):
+    link = "https://api.groupme.com/v3"
+    link += "/" + stream + "/" + groupId + "?token=" + accessToken
+
+    chatInfo = getRequest(link)
+
+    return (chatInfo["response"]["name"], chatInfo["response"]["members"])
+
+#Leverages the URLlib to send a GET Request and maps out any forbidden characters
 def getRequest(link):
     data = urllib.request.urlopen(link)
     non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd)
     return json.loads(data.read().decode().translate(non_bmp_map))
 
+#Sends GET messages to build up a dictionairy(JSON) of values
+#Logs the console every 500 retreieved 
 def buildMessageLog(link):
     base = link
     jsonData = getRequest(link)
@@ -163,9 +174,12 @@ def buildMessageLog(link):
             break
     return messages
 
-def record(messageList):
+#Creates an html file with chat history based on the message list
+#File name is the name of the chat suffixed by the date
+def record(chatDetails, messageList):
     print("Beginning to Create Chat Log")
-    htmlFile = open("Record.html","w",encoding="utf-8")
+    fileName = "Record-" + chatDetails[0] + "-" + str(datetime.now())[:10] +".html"
+    htmlFile = open(fileName,"w",encoding="utf-8")
 
     htmlFile.write("""
     <html>
@@ -196,21 +210,21 @@ def record(messageList):
     </html>
     """)
     htmlFile.close()
-    print("Succesfully Created Chat Log. Refer to Record.html in the Root Directory.")
+    print("Succesfully Created Chat Log. Refer to", fileName, "in the Root Directory.")
     
-def timeStandard(epochTime):
-    utcTime = datetime.fromtimestamp(epochTime, timezone.utc)
-    
-    return utcTime.astimezone().strftime("%m-%d-%Y %H-%M-%S")
-
-def peopleStats(messageList):
+#Obtains various stats by parsing through the message list and scanning relevant IDs
+def peopleStats(chatDetails, messageList):
     print("Beginning to Obtain All User Stats")
     
     commentCount = {}
+    mentionCount = {}
     likeCount = {}
     likesGiven = {}
     selfLikes = {}
     nickname = {}
+    
+    for member in chatDetails[1]:
+        nickname[member["user_id"]] = [member["nickname"]]
     
     for message in messageList:
         senderId = message["sender_id"]
@@ -219,6 +233,14 @@ def peopleStats(messageList):
         elif senderId in commentCount:
             commentCount[senderId] += 1
 
+        for attach in message["attachments"]:
+            if len(attach) > 0 and attach["type"] == "mentions":
+                for user in attach["user_ids"]:
+                    if user not in mentionCount:
+                        mentionCount[user] = 1
+                    elif user in mentionCount:
+                        mentionCount[user] += 1
+                    
         if senderId not in likeCount:
             likeCount[senderId] = len(message["favorited_by"])
         elif senderId in likeCount:
@@ -245,6 +267,10 @@ def peopleStats(messageList):
     commentRanking = displayStats(nickname,commentCount)
     print("Total Comments: ", sum(commentRanking.values()))
 
+    print("\n~~~~~~~~~~~~~~~~~TOTAL MENTIONS~~~~~~~~~~~~~~~\n")
+    mentionRanking = displayStats(nickname,mentionCount)
+    print("Total Comments: ", sum(mentionRanking.values()))
+
     print("\n~~~~~~~~~~~~~~TOTAL LIKES RECEIVED~~~~~~~~~~~~\n")
     likeRanking = displayStats(nickname,likeCount)
     print("Total Likes: ", sum(likeRanking.values()))
@@ -259,25 +285,9 @@ def peopleStats(messageList):
     
     print("\nFinished Displaying All User Stats")
     
-def displayStats(nickname,statsDict):
-    ranking = {}
-    
-    for user in statsDict:
-        try:
-            if len(nickname[user]) > 1 and len(nickname[user]) < 5:
-                ranking[tuple(nickname[user])] = statsDict[user]
-            else:
-                ranking[nickname[user][0]] = statsDict[user]
-        except:
-            print("Error Logging User:", user)
-        
-    sortedRanking = sorted(ranking.items(),key = operator.itemgetter(1))
 
-    for entry in sortedRanking[::-1]:
-        print(entry)
-        
-    return ranking
-    
+#Obtains the images from users and avatar changes and renames them based on
+#uploader and date
 def obtainImages(messageList):
     print("Beginning to Obtain All Images")
     translator=str.maketrans('','',string.punctuation)
@@ -304,20 +314,79 @@ def obtainImages(messageList):
             print(errorMessage)
     print("Obtaining Images Complete")
 
+def obtainVideos(messageList):
+    print("Beginning to Obtain All Videos")
+    regex = r"(https://v.groupme.com/.*\.mp4)"
+    
+    translator=str.maketrans('','',string.punctuation)
+    
+    
+    for message in messageList:
+        try:
+            text = message["text"]
+            if text and re.search(regex,text):
+                vidName = message["name"] + " "
+                vidName = vidName.translate(translator)
+                vidName += timeStandard(message["created_at"]) + ".mp4"
+                urllib.request.urlretrieve(re.search(regex,text).group(0),vidName)
+        except:
+            errorMessage = "Error getting video by " + message["name"]
+            errorMessage += " at time " + timeStandard(message["created_at"])
+            print(errorMessage)
+
+            
+    print("Obtaining Videos Complete")
+        
+        
+            
+        
+
+##################Utility Functions######################
+
+#Takes a dictionairy {userId:[nicknames]} and sorts them in desending order
+def displayStats(nickname,statsDict):
+    ranking = {}
+    
+    for user in statsDict:
+        try:
+            if len(nickname[user]) > 1 and len(nickname[user]) < 5:
+                ranking[tuple(nickname[user])] = statsDict[user]
+            else:
+                ranking[nickname[user][0]] = statsDict[user]
+        except:
+            print("Error Logging User:", user)
+        
+    sortedRanking = sorted(ranking.items(),key = operator.itemgetter(1))
+
+    for entry in sortedRanking[::-1]:
+        print(entry)
+        
+    return ranking
+
+#Used to convert time to a human readable value 
+def timeStandard(epochTime):
+    utcTime = datetime.fromtimestamp(epochTime, timezone.utc)
+    
+    return utcTime.astimezone().strftime("%m-%d-%Y %H-%M-%S")
+
 def main():
     groupId = intro()
     link = getLink(groupId)
     print()
     allMessages = buildMessageLog(link)
+    chatDetails = getChatDetails(groupId)
     print()
     if getChat:
-        record(allMessages[::-1])
+        record(chatDetails, allMessages[::-1])
         print()
     if getCommentorStats:
-        peopleStats(allMessages[::-1])
+        peopleStats(chatDetails, allMessages[::-1])
         print()
     if getImageLog:
         obtainImages(allMessages)
+        print()
+    if getVideoLog:
+        obtainVideos(allMessages)
         print()
     print("Thank you for using GroupMe Stats!")
     
