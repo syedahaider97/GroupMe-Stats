@@ -7,14 +7,12 @@ import os
 from datetime import datetime, timezone
 from time import sleep
 
-
 stream = ""
 accessToken = ""
 
 getChat = False
 getCommentorStats = False
 getImageLog = False
-
 
 def intro():
     global stream
@@ -95,8 +93,6 @@ def intro():
         print("This is likely because the choice entered above was not a valid number.")
         print("Restarting Program...\n")
         intro()
-              
-
 
 def getAll(choice, token):
     base = "https://api.groupme.com/v3"
@@ -127,12 +123,10 @@ def getLink(groupId):
         link += "&token=" + accessToken + "&limit=100"
     return link
 
-
 def getRequest(link):
     data = urllib.request.urlopen(link)
     non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd)
     return json.loads(data.read().decode().translate(non_bmp_map))
-
 
 def buildMessageLog(link):
     base = link
@@ -211,30 +205,78 @@ def timeStandard(epochTime):
 
 def peopleStats(messageList):
     print("Beginning to Obtain All User Stats")
-    nickname = {}
+    
     commentCount = {}
+    likeCount = {}
+    likesGiven = {}
+    selfLikes = {}
+    nickname = {}
+    
     for message in messageList:
         senderId = message["sender_id"]
         if senderId not in commentCount:
             commentCount[senderId] = 1
-        else:
+        elif senderId in commentCount:
             commentCount[senderId] += 1
 
+        if senderId not in likeCount:
+            likeCount[senderId] = len(message["favorited_by"])
+        elif senderId in likeCount:
+            likeCount[senderId] += len(message["favorited_by"])
+
+        for user in message["favorited_by"]:
+            if user not in likesGiven:
+                likesGiven[user] = 1
+            elif user in likesGiven:
+                likesGiven[user] += 1
+
+            if senderId == user:
+                if user not in selfLikes:
+                    selfLikes[user] = 1
+                elif user in selfLikes:
+                    selfLikes[user] += 1
+                    
         if senderId not in nickname:
             nickname[senderId] = []
         if message["name"] not in nickname[senderId]:
             nickname[senderId].append(message["name"])
+    
+    print("\n~~~~~~~~~~~~~~~~~TOTAL COMMENTS~~~~~~~~~~~~~~~\n")
+    commentRanking = displayStats(nickname,commentCount)
+    print("Total Comments: ", sum(commentRanking.values()))
 
+    print("\n~~~~~~~~~~~~~~TOTAL LIKES RECEIVED~~~~~~~~~~~~\n")
+    likeRanking = displayStats(nickname,likeCount)
+    print("Total Likes: ", sum(likeRanking.values()))
+
+    print("\n~~~~~~~~~~~~~~~TOTAL LIKES GIVEN~~~~~~~~~~~~~~\n")
+    givenRanking = displayStats(nickname,likesGiven)
+    print("Total Likes Given: ", sum(likesGiven.values()))
+
+    print("\n~~~~~~~~~~~~~~~~TOTAL SELF LIKES~~~~~~~~~~~~~~\n")
+    selfRanking = displayStats(nickname,selfLikes)
+    print("Total Self Likes Given: ", sum(selfRanking.values()))
+    
+    print("\nFinished Displaying All User Stats")
+    
+def displayStats(nickname,statsDict):
     ranking = {}
-    for user in commentCount:
-        key = tuple(nickname[user])
-        ranking[key[0]] = commentCount[user]
+    
+    for user in statsDict:
+        try:
+            if len(nickname[user]) > 1 and len(nickname[user]) < 5:
+                ranking[tuple(nickname[user])] = statsDict[user]
+            else:
+                ranking[nickname[user][0]] = statsDict[user]
+        except:
+            print("Error Logging User:", user)
         
     sortedRanking = sorted(ranking.items(),key = operator.itemgetter(1))
 
     for entry in sortedRanking[::-1]:
         print(entry)
-    print("Finished Displaying All User Stats")
+        
+    return ranking
     
 def obtainImages(messageList):
     print("Beginning to Obtain All Images")
@@ -281,4 +323,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-    os.system("pause")
