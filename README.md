@@ -27,7 +27,7 @@ All that is needed to run the application is Python3 and a GroupMe API Key.
 2. Logging in on the top right
 3. Selecting 'Access Token'
 
-Once you are ready, download/clone the repo, start up IDLE or any other IDE, copy the access token, and run the application! 
+Once you are ready, download/clone the repo, start up IDLE (comes with Python install) or any other IDE, open the Extractor.py file, copy the access token, and run the application (Run -> Run the application)! 
 The program will guide you through the rest.
 
 If you have any questions, or bugs to report, please contact me at sh424@njit.edu
