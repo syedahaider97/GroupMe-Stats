@@ -125,11 +125,17 @@ def getLink(groupId):
 #Gets basic information about the chat. Used to obtain name and members
 def getChatDetails(groupId):
     link = "https://api.groupme.com/v3"
-    link += "/" + stream + "/" + groupId + "?token=" + accessToken
-
-    chatInfo = getRequest(link)
-
-    return (chatInfo["response"]["name"], chatInfo["response"]["members"])
+    if stream == "groups":
+        link += "/" + stream + "/" + groupId + "?token=" + accessToken
+        chatInfo = getRequest(link)
+        return (chatInfo["response"]["name"], chatInfo["response"]["members"])
+    elif stream == "chats":
+        chatInfo = getAll(stream,accessToken)
+        for chat in chatInfo:
+            if chat["other_user"]["id"] == groupId:
+                return [chat["other_user"]["name"]]
+    
+    
 
 #Leverages the URLlib to send a GET Request and maps out any forbidden characters
 def getRequest(link):
@@ -222,9 +228,10 @@ def peopleStats(chatDetails, messageList):
     likesGiven = {}
     selfLikes = {}
     nickname = {}
-    
-    for member in chatDetails[1]:
-        nickname[member["user_id"]] = [member["nickname"]]
+
+    if stream == "groups":
+        for member in chatDetails[1]:
+            nickname[member["user_id"]] = [member["nickname"]]
     
     for message in messageList:
         senderId = message["sender_id"]
@@ -269,7 +276,7 @@ def peopleStats(chatDetails, messageList):
 
     print("\n~~~~~~~~~~~~~~~~~TOTAL MENTIONS~~~~~~~~~~~~~~~\n")
     mentionRanking = displayStats(nickname,mentionCount)
-    print("Total Comments: ", sum(mentionRanking.values()))
+    print("Total Mentions: ", sum(mentionRanking.values()))
 
     print("\n~~~~~~~~~~~~~~TOTAL LIKES RECEIVED~~~~~~~~~~~~\n")
     likeRanking = displayStats(nickname,likeCount)
@@ -314,6 +321,7 @@ def obtainImages(messageList):
             print(errorMessage)
     print("Obtaining Images Complete")
 
+#Obtains all videos from chat and renames them based on uploader and date
 def obtainVideos(messageList):
     print("Beginning to Obtain All Videos")
     regex = r"(https://v.groupme.com/.*\.mp4)"
