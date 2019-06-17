@@ -3,7 +3,7 @@ pipeline {
   stages {
     stage('Build') {
       steps {
-        sh 'python3 Extractor.py'
+        sh 'python Extractor.py'
       }
     }
   }
