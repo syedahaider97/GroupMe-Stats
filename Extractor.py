@@ -1,4 +1,5 @@
 import string
+import getpass
 import urllib.request
 import json
 import sys
@@ -28,7 +29,7 @@ def intro():
     print("Hello, and welcome to the GroupMe Stats Extractor")
     print("If you do not already have an access token, please refer to the README")
 
-    accessToken = input("Please Enter Your Access Token Now: ")
+    accessToken = getpass.getpass("Please Enter Your Access Token Now: ")
     
     print("Would you like to process a Group or a Direct Message stream?")
     while stream != 1 and stream != 2:
